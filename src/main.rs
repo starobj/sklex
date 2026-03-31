@@ -11,13 +11,27 @@ pub fn main() -> io::Result<()> {
         let mut lexer = lex(line.as_str());
 
         while let Some(token) = lexer.next() {
-            match token {
-                Ok(token) => println!("{:?}({:?})", token, lexer.slice()),
-                Err(_) => println!("Error"),
-            }
+            let lexeme = match token {
+                // Match any variant that contains a lexeme
+                Token::Block(l)
+                | Token::Newline(l)
+                | Token::Space(l)
+                | Token::Number(l)
+                | Token::Integer(l)
+                | Token::String(l)
+                | Token::XMLTagOpen(l)
+                | Token::XMLTagClose(l)
+                | Token::Text(l)
+                | Token::Symbol(l)
+                | Token::Indent(l)
+                | Token::Dedent(l) => l,
+                // Handle the Error variant separately
+                Token::Error => "(error)",
+            };
+            println!("{:?}({:?})", token, lexeme);
         }
 
-        println!("{:?}", Token::Newline);
+        println!("{:?}", Token::Newline("\n"));
     }
 
     Ok(())

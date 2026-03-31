@@ -1,31 +1,31 @@
 use logos::Logos;
 
-#[derive(Logos, Debug, PartialEq)]
+#[derive(Clone, Debug, Logos, PartialEq)]
 #[logos(skip r"[\f]+")] // Ignore this regex pattern between tokens
-pub enum Token {
+pub enum Token<'a> {
     #[regex(":(\\r?\\n)+")]
-    Block,
+    Block(&'a str),
 
     #[regex("(\\r?\\n)+")]
-    Newline,
+    Newline(&'a str),
 
     #[regex("[ 　\\t]+")]
-    Space,
+    Space(&'a str),
 
     #[regex("[0-9]+\\.[0-9]+|\\.[0-9]+|[0-9]+\\.")]
-    Number,
+    Number(&'a str),
 
     #[regex("[0-9]+")]
-    Integer,
+    Integer(&'a str),
 
     #[regex("\"[^\"]*\"")]
-    String,
+    String(&'a str),
 
     #[regex("<(?:\\w+)(?:\\s+[^>]*)?>")]
-    XMLTagOpen,
+    XMLTagOpen(&'a str),
 
     #[regex("<\\/\\w+>")]
-    XMLTagClose,
+    XMLTagClose(&'a str),
 
     /**
     A token containing natural language text.
@@ -70,14 +70,14 @@ pub enum Token {
     * Vietnamese (vi)
     */
     #[regex("(\\p{Script=Latin}+)|(一-龯ぁ-んァ-ンー・)")]
-    Text,
+    Text(&'a str),
 
     #[regex("[^\\w\\s]")]
-    Symbol,
+    Symbol(&'a str),
 
-    Indent,
+    Indent(&'a str),
 
-    Dedent,
+    Dedent(&'a str),
 
     Error
 }

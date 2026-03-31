@@ -1,88 +1,66 @@
-use std::ops::Range;
+use logos::Logos;
 
-use logos::{Lexer, Logos};
-
-use crate::Token;
-
-#[derive(Debug, PartialEq)]
-pub enum IndentAwareToken {
-    Token(Token),
-    Indent(usize),  // Now stores the indentation level (e.g., 1, 2, 3, ...)
-    Dedent(usize),  // Now stores the indentation level (e.g., 1, 2, 3, ...)
-}
+use crate::token::Token;
 
 pub struct IndentAwareLexer<'a> {
-    inner: Lexer<'a, Token>,
-    indent_stack: Vec<usize>,  // Tracks indentation levels in spaces
+    inner: logos::Lexer<'a, Token<'a>>,
+    indent_stack: Vec<usize>,
     pending_newline: bool,
-    next_token: Option<Result<Token, ()>>,
-    indent_size: usize,  // Number of spaces per indentation level (e.g., 4)
+    indent_size: usize,
 }
 
 impl<'a> IndentAwareLexer<'a> {
     pub fn new(source: &'a str) -> Self {
-        let mut lexer = Token::lexer(source);
-        let next_token = lexer.next();
         Self {
-            inner: lexer,
+            inner: Token::lexer(source),
             indent_stack: vec![0],
             pending_newline: false,
-            next_token,
-            indent_size: 4,  // Default: 4 spaces per indentation level
+            indent_size: 4,
         }
-    }
-
-    pub fn peek(&mut self) -> Option<&Result<Token, ()>> {
-        self.next_token.as_ref()
-    }
-
-    pub fn slice(&mut self) -> &str {
-        self.inner.slice()
-    }
-
-    pub fn span(&mut self) -> Range<usize> {
-        self.inner.span()
     }
 }
 
 impl<'a> Iterator for IndentAwareLexer<'a> {
-    type Item = IndentAwareToken;
+    type Item = Token<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.pending_newline {
             self.pending_newline = false;
-            if let Some(Ok(Token::Space)) = self.peek() {
-                // Consume the Space token
-                let _ = self.next_token.take();
-                let space_len = self.inner.slice().len();
+            // Peek at the next token without consuming it
+            let mut temp_lexer = self.inner.clone();
+            if let Some(Ok(Token::Space(lexeme))) = temp_lexer.next() {
+                let space_len = lexeme.len();
                 let current_indent = *self.indent_stack.last().unwrap();
 
                 if space_len > current_indent {
-                    // Calculate the new indentation level
                     let new_level = space_len / self.indent_size;
+                    let old_level = current_indent / self.indent_size;
                     self.indent_stack.push(space_len);
-                    return Some(IndentAwareToken::Indent(new_level));  // Use new_level here
+                    for _ in old_level..new_level {
+                        return Some(Token::Indent(lexeme));
+                    }
                 } else if space_len < current_indent {
-                    // Calculate how many levels to dedent
+                    let new_level = space_len / self.indent_size;
+                    let old_level = current_indent / self.indent_size;
                     while *self.indent_stack.last().unwrap() > space_len {
-                        let prev_indent = self.indent_stack.pop().unwrap();
-                        let dedent_level = prev_indent / self.indent_size;
-                        return Some(IndentAwareToken::Dedent(dedent_level));
+                        self.indent_stack.pop();
+                    }
+                    for _ in new_level..old_level {
+                        return Some(Token::Dedent(lexeme));
                     }
                 }
-                // If equal, just skip the space
-                self.next_token = self.inner.next();
+                // Consume the Space token
+                self.inner.next();
                 return self.next();
             }
         }
 
-        match self.next_token.take() {
+        match self.inner.next() {
             Some(Ok(token)) => {
-                self.next_token = self.inner.next();
-                if matches!(token, Token::Block | Token::Newline) {
+                if matches!(token, Token::Block(_) | Token::Newline(_)) {
                     self.pending_newline = true;
                 }
-                Some(IndentAwareToken::Token(token))
+                Some(token)
             }
             Some(Err(_)) => None,
             None => None,
