@@ -151,6 +151,19 @@ impl<'a> Iterator for IndentAwareLexer<'a> {
                                 span
                             )
                         )
+                    },
+
+                    Lexeme::Variable(lexeme) => {
+                        let length = lexeme.chars().count();
+                        Some(
+                            Token::new(
+                                Lexeme::Variable(
+                                    // Remove the quotes that surround the string.
+                                    lexeme.slice(1..(length - 1)).unwrap()
+                                ),
+                                span
+                            )
+                        )
                     }
                     _ => Some(Token { lexeme, span })
                 }

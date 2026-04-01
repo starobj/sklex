@@ -19,6 +19,9 @@ pub enum Lexeme<'a> {
     #[regex("[0-9]+")]
     Integer(&'a str),
 
+    #[regex("\\{[^\\}]*\\}")]
+    Variable(&'a str),
+
     #[regex("\"[^\"]*\"")]
     String(&'a str),
 
@@ -105,6 +108,7 @@ impl<'a> Token<'a> {
             Lexeme::Space(l) => l,
             Lexeme::Number(l) => l,
             Lexeme::Integer(l) => l,
+            Lexeme::Variable(l) => l,
             Lexeme::String(l) => l,
             Lexeme::XMLTagOpen(l) => l,
             Lexeme::XMLTagClose(l) => l,
