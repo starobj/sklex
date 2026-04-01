@@ -2,7 +2,7 @@ use logos::{Logos, Source};
 
 use crate::token::*;
 
-pub struct IndentAwareLexer<'a> {
+pub struct Lexer<'a> {
     inner: logos::Lexer<'a, Lexeme<'a>>,
     indent_stack: Vec<usize>,
     pending_newline: bool,
@@ -11,7 +11,7 @@ pub struct IndentAwareLexer<'a> {
     pub indent_size: usize,
 }
 
-impl<'a> IndentAwareLexer<'a> {
+impl<'a> Lexer<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
             inner: Lexeme::lexer(source),
@@ -28,7 +28,7 @@ impl<'a> IndentAwareLexer<'a> {
     }
 }
 
-impl<'a> Iterator for IndentAwareLexer<'a> {
+impl<'a> Iterator for Lexer<'a> {
     type Item = Token<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -174,6 +174,6 @@ impl<'a> Iterator for IndentAwareLexer<'a> {
     }
 }
 
-pub fn lex<'a>(source: &'a str) -> IndentAwareLexer<'a> {
-    IndentAwareLexer::new(source)
+pub fn lex<'a>(source: &'a str) -> Lexer<'a> {
+    Lexer::new(source)
 }
