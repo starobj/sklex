@@ -4,6 +4,6 @@ function sum(list: list) :: number:
 
     loop {list::*}:
 
-        add {list::%loop-index%} to {_sum}
+        add loop-value to {_sum}
 
     return {_sum}
