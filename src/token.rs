@@ -70,7 +70,7 @@ pub enum Lexeme<'a> {
     * Ukrainian (uk)
     * Vietnamese (vi)
     */
-    #[regex("(([\\_]|\\p{Script=Latin})+)|(一-龯ぁ-んァ-ンー・)")]
+    #[regex("([\\_]|(\\p{Script=Latin})+|(一-龯ぁ-んァ-ンー・))([\\_]|(\\p{Script=Latin})+|(一-龯ぁ-んァ-ンー・))*")]
     Text(&'a str),
 
     // #[regex("[\\:\\;\\.\\+\\-\\*\\/\\=<>]\\{\\}")]
