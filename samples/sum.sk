@@ -1,0 +1,9 @@
+function sum(list: list) :: number:
+
+    set {_sum} to 0
+
+    loop {list::*}:
+
+        add {list::%loop-index%} to {_sum}
+
+    return {_sum}
