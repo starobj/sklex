@@ -1,6 +1,6 @@
-use logos::{Logos};
+use logos::{Logos, Source};
 
-use crate::{Lexeme, Token};
+use crate::token::*;
 
 pub struct IndentAwareLexer<'a> {
     inner: logos::Lexer<'a, Lexeme<'a>>,
@@ -133,10 +133,27 @@ impl<'a> Iterator for IndentAwareLexer<'a> {
         match self.inner.next() {
             Some(Ok(lexeme)) => {
                 let span = self.inner.span();
-                if matches!(lexeme, Lexeme::Block(_) | Lexeme::Newline(_)) {
-                    self.pending_newline = true;
+                match lexeme {
+                    Lexeme::Block(_)
+                    | Lexeme::Newline(_) => {
+                        self.pending_newline = true;
+
+                        Some(Token { lexeme, span })
+                    }
+                    Lexeme::String(lexeme) => {
+                        let length = lexeme.chars().count();
+                        Some(
+                            Token::new(
+                                Lexeme::String(
+                                    // Remove the quotes that surround the string.
+                                    lexeme.slice(1..(length - 1)).unwrap()
+                                ),
+                                span
+                            )
+                        )
+                    }
+                    _ => Some(Token { lexeme, span })
                 }
-                Some(Token { lexeme, span })
             }
             Some(Err(_)) => None,
             None => None,
