@@ -1,8 +1,9 @@
+use std::ops::Range;
 use logos::Logos;
 
 #[derive(Clone, Debug, Logos, PartialEq)]
 #[logos(skip r"[\f]+")] // Ignore this regex pattern between tokens
-pub enum Token<'a> {
+pub enum Lexeme<'a> {
     #[regex(":(\\r?\\n)+")]
     Block(&'a str),
 
@@ -80,4 +81,37 @@ pub enum Token<'a> {
     Dedent(&'a str),
 
     Error
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Token<'a> {
+    pub lexeme: Lexeme<'a>,
+    pub span: Range<usize>,
+}
+
+impl<'a> Token<'a> {
+    pub fn new(lexeme: Lexeme<'a>, span: Range<usize>) -> Token<'a> {
+        Token {
+            lexeme,
+            span
+        }
+    }
+
+    pub fn lexeme_str(&self) -> &'a str {
+        match self.lexeme {
+            Lexeme::Block(l) => l,
+            Lexeme::Newline(l) => l,
+            Lexeme::Space(l) => l,
+            Lexeme::Number(l) => l,
+            Lexeme::Integer(l) => l,
+            Lexeme::String(l) => l,
+            Lexeme::XMLTagOpen(l) => l,
+            Lexeme::XMLTagClose(l) => l,
+            Lexeme::Text(l) => l,
+            Lexeme::Symbol(l) => l,
+            Lexeme::Indent(l) => l,
+            Lexeme::Dedent(l) => l,
+            Lexeme::Error => "(error)",
+        }
+    }
 }
