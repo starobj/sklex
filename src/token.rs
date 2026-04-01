@@ -70,11 +70,8 @@ pub enum Lexeme<'a> {
     * Ukrainian (uk)
     * Vietnamese (vi)
     */
-    #[regex("(\\p{Script=Latin}+)|(一-龯ぁ-んァ-ンー・)")]
+    #[regex("(([\\_]|\\p{Script=Latin})+)|(一-龯ぁ-んァ-ンー・)")]
     Text(&'a str),
-
-    #[token("_")]
-    Underscore,
 
     // #[regex("[\\:\\;\\.\\+\\-\\*\\/\\=<>]\\{\\}")]
     #[regex("[^\\w\\s]|[\\{\\}]")]
@@ -113,7 +110,6 @@ impl<'a> Token<'a> {
             Lexeme::XMLTagClose(l) => l,
             Lexeme::Text(l) => l,
             Lexeme::Symbol(l) => l,
-            Lexeme::Underscore => "_",
             Lexeme::Indent => "(indent)",
             Lexeme::Dedent => "(dedent)",
             Lexeme::Error => "(error)",
