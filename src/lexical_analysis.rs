@@ -1,4 +1,4 @@
-use logos::{Lexer, Logos};
+use logos::{Logos};
 
 use crate::{Lexeme, Token};
 
@@ -8,30 +8,23 @@ pub struct IndentAwareLexer<'a> {
     pending_newline: bool,
     pending_indent_count: usize,
     pending_dedent_count: usize,
-    indent_size: usize,
-    indent_lexeme: String,
+    pub indent_size: usize,
 }
 
 impl<'a> IndentAwareLexer<'a> {
     pub fn new(source: &'a str) -> Self {
-        let mut lexer = Self {
+        Self {
             inner: Lexeme::lexer(source),
             indent_stack: vec![0],
             pending_newline: false,
             pending_indent_count: 0,
             pending_dedent_count: 0,
-            indent_size: 0,
-            indent_lexeme: String::new(),
-        };
-
-        lexer.set_indent_size(4);
-
-        lexer
+            indent_size: 4,
+        }
     }
 
-    pub fn set_indent_size(&mut self, indent_size: usize) {
-        self.indent_size = indent_size;
-        self.indent_lexeme = String::from(" ".repeat(indent_size).as_str());
+    pub fn indent_level(&self) -> usize {
+        return self.indent_stack.len() - 1;
     }
 }
 
@@ -48,12 +41,13 @@ impl<'a> Iterator for IndentAwareLexer<'a> {
                 let space_length = lexeme.len();
                 let new_level = space_length / self.indent_size;
                 let old_level = current_indent_length / self.indent_size;
-                println!("Indent({} -> {})", old_level, new_level);
                 self.indent_stack.push(space_length);
                 self.pending_indent_count = new_level - old_level - 1;
+                // Consume the space.
+                self.inner.next();
                 return Some(
                     Token {
-                        lexeme: Lexeme::Indent(self.indent_lexeme.as_str()),
+                        lexeme: Lexeme::Indent,
                         span: span.clone(),
                     }
                 );
@@ -69,12 +63,13 @@ impl<'a> Iterator for IndentAwareLexer<'a> {
                 let space_length = lexeme.len();
                 let new_level = space_length / self.indent_size;
                 let old_level = current_indent_length / self.indent_size;
-                println!("Dedent({} -> {})", old_level, new_level);
                 self.indent_stack.pop();
                 self.pending_indent_count = new_level - old_level - 1;
+                // Consume the space.
+                self.inner.next();
                 return Some(
                     Token {
-                        lexeme: Lexeme::Dedent(""),
+                        lexeme: Lexeme::Dedent,
                         span,
                     }
                 );
@@ -85,9 +80,7 @@ impl<'a> Iterator for IndentAwareLexer<'a> {
         }
         if self.pending_newline {
             self.pending_newline = false;
-            println!("pending_newline == true");
             if let Some(Ok(Lexeme::Space(lexeme))) = peeker.next() {
-                println!("Indentation encountered: {:?}", lexeme);
                 let span = peeker.span();
                 let space_length = lexeme.len();
                 let current_indent_length = *self.indent_stack.last().unwrap();
@@ -95,40 +88,45 @@ impl<'a> Iterator for IndentAwareLexer<'a> {
                 if space_length > current_indent_length {
                     let new_level = space_length / self.indent_size;
                     let old_level = current_indent_length / self.indent_size;
-                    println!("Indent({} -> {})", old_level, new_level);
                     self.indent_stack.push(space_length);
                     self.pending_indent_count = new_level - old_level - 1;
+                    // Consume the space.
+                    self.inner.next();
                     return Some(
                         Token {
-                            lexeme: Lexeme::Indent(lexeme),
+                            lexeme: Lexeme::Indent,
                             span: span.clone(),
                         }
                     );
                 } else if space_length < current_indent_length {
                     let new_level = space_length / self.indent_size;
                     let old_level = current_indent_length / self.indent_size;
-                    println!("Dedent({} -> {})", old_level, new_level);
-                    // while *self.indent_stack.last().unwrap() > space_len {
-                    //     self.indent_stack.pop();
-                    // }
-                    // for _ in new_level..old_level {
-                    //     return Some(Token {
-                    //         lexeme: Lexeme::Dedent(lexeme),
-                    //         span: span.clone(),
-                    //     });
-                    // }
                     self.pending_dedent_count = old_level - new_level - 1;
                     self.indent_stack.pop();
+                    // Consume the space.
+                    self.inner.next();
                     return Some(
                         Token {
-                            lexeme: Lexeme::Indent(lexeme),
+                            lexeme: Lexeme::Dedent,
                             span: span.clone(),
                         }
                     );
                 }
-                // Consume the Space token
+                // Consume the space.
                 self.inner.next();
                 return self.next();
+            }
+            else if self.indent_stack.len() > 1 {
+                self.pending_newline = true;
+                self.indent_stack.pop();
+                let mut span = peeker.span().clone();
+                span.end = span.start;
+                return Some(
+                    Token {
+                        lexeme: Lexeme::Dedent,
+                        span,
+                    }
+                );
             }
         }
 

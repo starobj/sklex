@@ -73,12 +73,16 @@ pub enum Lexeme<'a> {
     #[regex("(\\p{Script=Latin}+)|(一-龯ぁ-んァ-ンー・)")]
     Text(&'a str),
 
-    #[regex("[^\\w\\s]")]
+    #[token("_")]
+    Underscore,
+
+    // #[regex("[\\:\\;\\.\\+\\-\\*\\/\\=<>]\\{\\}")]
+    #[regex("[^\\w\\s]|[\\{\\}]")]
     Symbol(&'a str),
 
-    Indent(&'a str),
+    Indent,
 
-    Dedent(&'a str),
+    Dedent,
 
     Error
 }
@@ -109,8 +113,9 @@ impl<'a> Token<'a> {
             Lexeme::XMLTagClose(l) => l,
             Lexeme::Text(l) => l,
             Lexeme::Symbol(l) => l,
-            Lexeme::Indent(l) => l,
-            Lexeme::Dedent(l) => l,
+            Lexeme::Underscore => "_",
+            Lexeme::Indent => "(indent)",
+            Lexeme::Dedent => "(dedent)",
             Lexeme::Error => "(error)",
         }
     }
