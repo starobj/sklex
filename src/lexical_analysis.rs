@@ -1,9 +1,73 @@
+use std::hash::{DefaultHasher, Hash, Hasher};
 use logos::{Logos, Source};
 
 use crate::token::*;
 
-pub struct Lexer<'a> {
-    inner: logos::Lexer<'a, Lexeme<'a>>,
+#[derive(Clone, Debug, PartialEq)]
+enum LexerOp<'source> {
+    /**
+    An error was encountered.
+     */
+    Error,
+
+    /**
+    Lex a token.
+     */
+    Lex(Lexeme<'source>),
+
+    /**
+    Lex a newline token and any following indentation/dedentation.
+     */
+    Newline,
+
+    /**
+    Lex an indent.
+     */
+    Indent,
+
+    /**
+    Lex an dedent.
+     */
+    Dedent,
+
+    /**
+    End of File
+     */
+    Eof,
+}
+
+impl<'source> Hash for LexerOp<'source> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+
+        match self {
+            LexerOp::Error => {
+                0.hash(state);
+            },
+            LexerOp::Lex(token) => {
+                1.hash(state);
+                token.hash(state);
+            }
+            LexerOp::Newline => {
+                2.hash(state);
+            },
+            LexerOp::Indent => {
+                3.hash(state);
+            },
+            LexerOp::Dedent => {
+                4.hash(state);
+            },
+            LexerOp::Eof => {
+                5.hash(state);
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Lexer<'source> {
+    state_hasher: DefaultHasher,
+    inner: logos::Lexer<'source, Lexeme<'source>>,
     indent_stack: Vec<usize>,
     pending_newline: bool,
     pending_indent_count: usize,
@@ -11,9 +75,10 @@ pub struct Lexer<'a> {
     pub indent_size: usize,
 }
 
-impl<'a> Lexer<'a> {
-    pub fn new(source: &'a str) -> Self {
+impl<'source> Lexer<'source> {
+    pub fn new(source: &'source str) -> Self {
         Self {
+            state_hasher: DefaultHasher::new(),
             inner: Lexeme::lexer(source),
             indent_stack: vec![0],
             pending_newline: false,
@@ -26,10 +91,56 @@ impl<'a> Lexer<'a> {
     pub fn indent_level(&self) -> usize {
         return self.indent_stack.len() - 1;
     }
+
+    fn hash_op(&mut self, op: LexerOp) {
+        op.hash(&mut self.state_hasher);
+    }
 }
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Token<'a>;
+impl<'source> Hash for Lexer<'source> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        // self.indent_stack.hash(state);
+        // self.pending_newline.hash(state);
+        // self.pending_indent_count.hash(state);
+        // self.pending_dedent_count.hash(state);
+        // self.indent_size.hash(state);
+        self.state_hasher.clone().finish().hash(state);
+
+        let lexemes = self.inner.clone().collect::<Vec<Result<Lexeme<'source>, ()>>>();
+
+        for lexeme in lexemes {
+            if lexeme.is_err() {
+                // Write an empty lexeme.
+                state.write_usize(0);
+
+                // Continue the loop.
+                continue;
+            }
+
+            lexeme.unwrap().hash(state);
+        }
+    }
+}
+
+impl<'source> PartialEq for Lexer<'source> {
+    fn eq(&self, other: &Self) -> bool {
+        // Hash self.
+        let mut self_hasher = DefaultHasher::new();
+        self.hash(&mut self_hasher);
+        let self_hash = self_hasher.finish();
+
+        // Hash other.
+        let mut other_hasher = DefaultHasher::new();
+        other.hash(&mut other_hasher);
+        let other_hash = other_hasher.finish();
+
+        // Compare hashes.
+        self_hash == other_hash
+    }
+}
+
+impl<'source> Iterator for Lexer<'source> {
+    type Item = Token<'source>;
 
     fn next(&mut self) -> Option<Self::Item> {
         // Peek at the next token without consuming it
@@ -45,6 +156,7 @@ impl<'a> Iterator for Lexer<'a> {
                 self.pending_indent_count = new_level - old_level - 1;
                 // Consume the space.
                 self.inner.next();
+                self.hash_op(LexerOp::Indent);
                 return Some(
                     Token {
                         lexeme: Lexeme::Indent,
@@ -53,6 +165,7 @@ impl<'a> Iterator for Lexer<'a> {
                 );
             }
             else {
+                self.hash_op(LexerOp::Error);
                 return Some(Token::new(Lexeme::Error, self.inner.span()));
             }
         }
@@ -67,6 +180,7 @@ impl<'a> Iterator for Lexer<'a> {
                 self.pending_indent_count = new_level - old_level - 1;
                 // Consume the space.
                 self.inner.next();
+                self.hash_op(LexerOp::Dedent);
                 return Some(
                     Token {
                         lexeme: Lexeme::Dedent,
@@ -75,14 +189,15 @@ impl<'a> Iterator for Lexer<'a> {
                 );
             }
             else {
+                self.hash_op(LexerOp::Error);
                 return Some(Token::new(Lexeme::Error, self.inner.span()));
             }
         }
         if self.pending_newline {
             self.pending_newline = false;
-            if let Some(Ok(Lexeme::Space(lexeme))) = peeker.next() {
+            if let Some(Ok(Lexeme::Space(slice))) = peeker.next() {
                 let span = peeker.span();
-                let space_length = lexeme.len();
+                let space_length = slice.len();
                 let current_indent_length = *self.indent_stack.last().unwrap();
 
                 if space_length > current_indent_length {
@@ -92,6 +207,7 @@ impl<'a> Iterator for Lexer<'a> {
                     self.pending_indent_count = new_level - old_level - 1;
                     // Consume the space.
                     self.inner.next();
+                    self.hash_op(LexerOp::Indent);
                     return Some(
                         Token {
                             lexeme: Lexeme::Indent,
@@ -105,6 +221,7 @@ impl<'a> Iterator for Lexer<'a> {
                     self.indent_stack.pop();
                     // Consume the space.
                     self.inner.next();
+                    self.hash_op(LexerOp::Dedent);
                     return Some(
                         Token {
                             lexeme: Lexeme::Dedent,
@@ -121,6 +238,7 @@ impl<'a> Iterator for Lexer<'a> {
                 self.indent_stack.pop();
                 let mut span = peeker.span().clone();
                 span.end = span.start;
+                self.hash_op(LexerOp::Dedent);
                 return Some(
                     Token {
                         lexeme: Lexeme::Dedent,
@@ -132,34 +250,36 @@ impl<'a> Iterator for Lexer<'a> {
 
         match self.inner.next() {
             Some(Ok(lexeme)) => {
+                self.hash_op(LexerOp::Lex(lexeme.clone()));
                 let span = self.inner.span();
                 match lexeme {
                     Lexeme::Block(_)
                     | Lexeme::Newline(_) => {
                         self.pending_newline = true;
 
+                        self.hash_op(LexerOp::Newline);
                         Some(Token { lexeme, span })
                     }
-                    Lexeme::String(lexeme) => {
-                        let length = lexeme.chars().count();
+                    Lexeme::String(slice) => {
+                        let length = slice.chars().count();
                         Some(
                             Token::new(
                                 Lexeme::String(
                                     // Remove the quotes that surround the string.
-                                    lexeme.slice(1..(length - 1)).unwrap()
+                                    slice.slice(1..(length - 1)).unwrap()
                                 ),
                                 span
                             )
                         )
                     },
 
-                    Lexeme::Variable(lexeme) => {
-                        let length = lexeme.chars().count();
+                    Lexeme::Variable(slice) => {
+                        let length = slice.chars().count();
                         Some(
                             Token::new(
                                 Lexeme::Variable(
                                     // Remove the quotes that surround the string.
-                                    lexeme.slice(1..(length - 1)).unwrap()
+                                    slice.slice(1..(length - 1)).unwrap()
                                 ),
                                 span
                             )
@@ -168,12 +288,20 @@ impl<'a> Iterator for Lexer<'a> {
                     _ => Some(Token { lexeme, span })
                 }
             }
-            Some(Err(_)) => None,
-            None => None,
+            Some(Err(_)) => {
+                self.hash_op(LexerOp::Error);
+
+                None
+            },
+            None => {
+                self.hash_op(LexerOp::Eof);
+
+                None
+            },
         }
     }
 }
 
-pub fn lex<'a>(source: &'a str) -> Lexer<'a> {
+pub fn lex<'source>(source: &'source str) -> Lexer<'source> {
     Lexer::new(source)
 }

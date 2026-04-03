@@ -1,7 +1,8 @@
+use std::hash::Hash;
 use std::ops::Range;
 use logos::Logos;
 
-#[derive(Clone, Debug, Logos, PartialEq)]
+#[derive(Clone, Debug, Hash, Logos, PartialEq)]
 #[logos(skip r"[\f]+")] // Ignore this regex pattern between tokens
 pub enum Lexeme<'a> {
     #[regex(":(\\r?\\n)+")]
@@ -87,7 +88,7 @@ pub enum Lexeme<'a> {
     Error
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Token<'a> {
     pub lexeme: Lexeme<'a>,
     pub span: Range<usize>,
