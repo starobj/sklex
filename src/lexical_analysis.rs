@@ -64,8 +64,34 @@ impl<'source> Hash for LexerOp<'source> {
     }
 }
 
+/**
+A Skript source code lexical analyzer.
+Used to tokenize Skript source code as a token iterator.
+This implementation is a streaming lexical analyzer,
+meaning that it returns an `Iterator` of `Token`s,
+rather than a `Vec<Token>` or slice (`&[Token]`).
+
+Lexers can be compared by token stream progress:
+
+```rs
+// Define some source code.
+let source = "hello world";
+// Create a couple of lexers: `a` and `b`.
+let a = Lexer::new(source);
+let b = Lexer::new(source);
+// Read a token from `a`, but not `b`.
+let token = a.next();
+// Check which has processed more tokens:
+if a > b {
+    // `a` has lexed more tokens than `b`.
+    // `a` is closer to the end than `b`.
+    // Therefore, this block of code gets executed.
+}
+```
+ */
 #[derive(Clone, Debug)]
 pub struct Lexer<'source> {
+    op_count: usize,
     state_hasher: DefaultHasher,
     inner: logos::Lexer<'source, Lexeme<'source>>,
     indent_stack: Vec<usize>,
@@ -78,6 +104,7 @@ pub struct Lexer<'source> {
 impl<'source> Lexer<'source> {
     pub fn new(source: &'source str) -> Self {
         Self {
+            op_count: usize::MIN,
             state_hasher: DefaultHasher::new(),
             inner: Lexeme::lexer(source),
             indent_stack: vec![0],
@@ -94,6 +121,8 @@ impl<'source> Lexer<'source> {
 
     fn hash_op(&mut self, op: LexerOp) {
         op.hash(&mut self.state_hasher);
+
+        self.op_count += 1;
     }
 }
 
@@ -119,23 +148,6 @@ impl<'source> Hash for Lexer<'source> {
 
             lexeme.unwrap().hash(state);
         }
-    }
-}
-
-impl<'source> PartialEq for Lexer<'source> {
-    fn eq(&self, other: &Self) -> bool {
-        // Hash self.
-        let mut self_hasher = DefaultHasher::new();
-        self.hash(&mut self_hasher);
-        let self_hash = self_hasher.finish();
-
-        // Hash other.
-        let mut other_hasher = DefaultHasher::new();
-        other.hash(&mut other_hasher);
-        let other_hash = other_hasher.finish();
-
-        // Compare hashes.
-        self_hash == other_hash
     }
 }
 
@@ -299,6 +311,29 @@ impl<'source> Iterator for Lexer<'source> {
                 None
             },
         }
+    }
+}
+
+impl<'source> PartialEq for Lexer<'source> {
+    fn eq(&self, other: &Self) -> bool {
+        // Hash self.
+        let mut self_hasher = DefaultHasher::new();
+        self.hash(&mut self_hasher);
+        let self_hash = self_hasher.finish();
+
+        // Hash other.
+        let mut other_hasher = DefaultHasher::new();
+        other.hash(&mut other_hasher);
+        let other_hash = other_hasher.finish();
+
+        // Compare hashes.
+        self_hash == other_hash
+    }
+}
+
+impl<'source> PartialOrd for Lexer<'source> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.op_count.partial_cmp(&other.op_count)
     }
 }
 
